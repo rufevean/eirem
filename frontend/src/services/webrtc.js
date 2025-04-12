@@ -19,7 +19,12 @@ const ICE_SERVERS = {
 
 class WebRTCService {
     constructor() {
-        if (!navigator.mediaDevices || !window.RTCPeerConnection) {
+        // More detailed browser compatibility checks
+        if (!navigator?.mediaDevices?.getDisplayMedia) {
+            throw new Error('Screen sharing is not supported in this browser');
+        }
+        
+        if (!window.RTCPeerConnection) {
             throw new Error('WebRTC is not supported in this browser');
         }
         
@@ -240,22 +245,28 @@ class WebRTCService {
     }
 }
 
-// Export as singleton instance with error handling
+// More detailed error handling for service initialization
 let webRTCServiceInstance = null;
 
 try {
     webRTCServiceInstance = new WebRTCService();
+    // Test if screen sharing is actually available
+    if (!navigator?.mediaDevices?.getDisplayMedia) {
+        throw new Error('Screen sharing not supported');
+    }
 } catch (error) {
-    console.error('Failed to initialize WebRTC service:', error);
-    // Provide a mock service for graceful degradation
+    console.error('WebRTC Service initialization failed:', error.message);
+    // Provide a more informative mock service
     webRTCServiceInstance = {
-        initializePeerConnection: () => Promise.reject(new Error('WebRTC not supported')),
-        startScreenShare: () => Promise.reject(new Error('WebRTC not supported')),
-        stopScreenShare: () => Promise.reject(new Error('WebRTC not supported')),
-        handleIncomingOffer: () => Promise.reject(new Error('WebRTC not supported')),
-        handleAnswer: () => Promise.reject(new Error('WebRTC not supported')),
-        handleIceCandidate: () => Promise.reject(new Error('WebRTC not supported')),
-        cleanup: () => {}
+        initializePeerConnection: () => Promise.reject(new Error(`WebRTC initialization failed: ${error.message}`)),
+        startScreenShare: () => Promise.reject(new Error(`Screen sharing not available: ${error.message}`)),
+        stopScreenShare: () => Promise.reject(new Error(`Screen sharing not available: ${error.message}`)),
+        handleIncomingOffer: () => Promise.reject(new Error(`WebRTC not available: ${error.message}`)),
+        handleAnswer: () => Promise.reject(new Error(`WebRTC not available: ${error.message}`)),
+        handleIceCandidate: () => Promise.reject(new Error(`WebRTC not available: ${error.message}`)),
+        cleanup: () => {},
+        onRemoteStreamAvailable: null,
+        remoteStream: null
     };
 }
 
