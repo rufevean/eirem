@@ -23,7 +23,7 @@ export const initSocket = () => {
     return null;
   }
 
-  socket = io("http://localhost:5000", {
+  socket = io("http://192.168.1.3:5000", {
     query: { 
       token: storedUser.token,
       userId: storedUser.id  // Add user ID as additional query param
@@ -47,6 +47,17 @@ export const initSocket = () => {
       console.log("Attempting to refresh connection...");
       socket.disconnect();
       socket = null;
+    }
+  });
+
+  socket.on('screen-share-offer', async (data) => {
+    console.log('Received screen-share-offer:', data);
+    const { offer, targetUserId } = data;
+
+    if (webRTCService) {
+        await webRTCService.handleIncomingOffer(offer, targetUserId);
+    } else {
+        console.error('WebRTCService is not initialized');
     }
   });
 

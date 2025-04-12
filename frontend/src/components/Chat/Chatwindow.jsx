@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSocket } from '../../services/socket.js';
-import webRTCService from '../../services/webrtc';
+import webRTCService from '../../services/webrtc.js';
 import API from '../../services/api';
 
 const ChatWindow = ({ selectedUser }) => {
@@ -8,6 +8,7 @@ const ChatWindow = ({ selectedUser }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isStreamAccepted, setIsStreamAccepted] = useState(false);
   const screenVideoRef = useRef(null);
 
   const handleSend = () => {
@@ -27,7 +28,7 @@ const ChatWindow = ({ selectedUser }) => {
       console.error("Missing user information");
       return;
     }
-  
+
     const messageObj = {
       from: String(storedUser.id), // Ensure IDs are strings
       to: String(selectedUser.id),
@@ -59,6 +60,15 @@ const ChatWindow = ({ selectedUser }) => {
       }
     } catch (error) {
       console.error('Screen sharing error:', error);
+    }
+  };
+
+  const handleAcceptStream = () => {
+    if (webRTCService.remoteStream && screenVideoRef.current) {
+      screenVideoRef.current.srcObject = webRTCService.remoteStream;
+      setIsStreamAccepted(true);
+    } else {
+      console.error('Remote stream or video element is missing.');
     }
   };
 
@@ -100,16 +110,30 @@ const ChatWindow = ({ selectedUser }) => {
     });
 
     sock.on('screen-sharing-started', () => {
-      // Show remote screen sharing video
-      if (screenVideoRef.current) {
-        screenVideoRef.current.srcObject = webRTCService.remoteStream;
-      }
+      console.log('Receiver: Screen sharing started');
+      setIsStreamAccepted(false); // Reset accept button state on new share
     });
 
     sock.on('screen-sharing-stopped', () => {
       if (screenVideoRef.current) {
         screenVideoRef.current.srcObject = null;
       }
+      setIsStreamAccepted(false);
+    });
+
+    sock.on('screen-share-offer', async (data) => {
+      console.log('Received screen share offer:', data);
+      await webRTCService.handleIncomingOffer(data.offer, selectedUser.id);
+    });
+
+    sock.on('screen-share-answer', async (data) => {
+      console.log('Received screen share answer:', data);
+      await webRTCService.handleAnswer(data.answer);
+    });
+
+    sock.on('ice-candidate', async (data) => {
+      console.log('Received ICE candidate:', data);
+      await webRTCService.handleIceCandidate(data.candidate);
     });
 
     return () => {
@@ -117,6 +141,9 @@ const ChatWindow = ({ selectedUser }) => {
       sock.off('error');
       sock.off('screen-sharing-started');
       sock.off('screen-sharing-stopped');
+      sock.off('screen-share-offer');
+      sock.off('screen-share-answer');
+      sock.off('ice-candidate');
     };
   }, [selectedUser, storedUser]);
 
@@ -149,6 +176,18 @@ const ChatWindow = ({ selectedUser }) => {
           {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
         </button>
       </div>
+
+      {/* Accept stream button */}
+      {!isStreamAccepted && !isScreenSharing && (
+        <div className="mb-4">
+          <button
+            onClick={handleAcceptStream}
+            className="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600 text-white"
+          >
+            Accept Stream
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto space-y-2 mb-4">
         {messages.map((msg, idx) => (

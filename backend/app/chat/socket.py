@@ -91,3 +91,45 @@ def register_socketio_events(socketio):
             target_sid = connected_users.get(str(data['targetUserId']))
             if target_sid:
                 emit('screen-sharing-stopped', room=target_sid)
+
+    @socketio.on('screen-share-offer')
+    def handle_screen_share_offer(data):
+        print(f"[WebRTC] Received offer from {request.sid}")
+        print(f"[WebRTC] Target user ID: {data.get('targetUserId')}")
+        print(f"[WebRTC] Offer: {data.get('offer')}")
+        target_sid = connected_users.get(str(data['targetUserId']))
+        if target_sid:
+            print(f"[WebRTC] Forwarding offer to {target_sid}")
+            emit('screen-share-offer', {
+                'offer': data['offer'],
+                'from': data.get('fromUserId')  # ✅ send the sender's user ID
+            }, room=target_sid)
+
+        else:
+            print(f"[WebRTC] Target user not found: {data['targetUserId']}")
+
+    @socketio.on('screen-share-answer')
+    def handle_screen_share_answer(data):
+        print(f"[WebRTC] Received answer for target user ID: {data.get('targetUserId')}")
+        print(f"[WebRTC] Answer: {data.get('answer')}")
+        target_sid = connected_users.get(str(data['targetUserId']))
+        if target_sid:
+            print(f"[WebRTC] Forwarding answer to {target_sid}")
+            emit('screen-share-answer', {
+                'answer': data['answer']
+            }, room=target_sid)
+        else:
+            print(f"[WebRTC] Target user not found: {data['targetUserId']}")
+
+    @socketio.on('ice-candidate')
+    def handle_ice_candidate(data):
+        print(f"[WebRTC] Forwarding ICE candidate: {data.get('candidate')}")
+        print(f"[WebRTC] Target user ID: {data.get('targetUserId')}")
+        target_sid = connected_users.get(str(data['targetUserId']))
+        if target_sid:
+            print(f"[WebRTC] Forwarding ICE candidate to SID: {target_sid}")
+            emit('ice-candidate', {
+                'candidate': data['candidate']
+            }, room=target_sid)
+        else:
+            print(f"[WebRTC] Target user not found for ICE candidate")
