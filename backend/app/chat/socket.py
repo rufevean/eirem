@@ -75,3 +75,19 @@ def register_socketio_events(socketio):
         except Exception as e:
             print(f"[Socket] Error handling private_message: {e}")
             emit("error", {"message": str(e)})
+
+    @socketio.on('screen-sharing-started')
+    def handle_screen_sharing_started(data):
+        """Handle screen sharing start event"""
+        if 'targetUserId' in data:
+            target_sid = connected_users.get(str(data['targetUserId']))
+            if target_sid:
+                emit('screen-sharing-started', room=target_sid)
+
+    @socketio.on('screen-sharing-stopped')
+    def handle_screen_sharing_stopped(data):
+        """Handle screen sharing stop event"""
+        if 'targetUserId' in data:
+            target_sid = connected_users.get(str(data['targetUserId']))
+            if target_sid:
+                emit('screen-sharing-stopped', room=target_sid)

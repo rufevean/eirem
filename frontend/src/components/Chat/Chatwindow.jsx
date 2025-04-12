@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getSocket } from '../../services/socket.js';
+import webRTCService from '../../services/webrtc';
 import API from '../../services/api';
 
 const ChatWindow = ({ selectedUser }) => {
   const storedUser = JSON.parse(localStorage.getItem('user'));
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const screenVideoRef = useRef(null);
+
   const handleSend = () => {
     console.log("🔹 handleSend triggered");
     
@@ -41,7 +45,22 @@ const ChatWindow = ({ selectedUser }) => {
       setNewMessage('');
     });
   };
-  
+
+  const handleScreenShare = async () => {
+    try {
+      if (!isScreenSharing) {
+        const screenStream = await webRTCService.startScreenShare(selectedUser.id);
+        screenVideoRef.current.srcObject = screenStream;
+        setIsScreenSharing(true);
+      } else {
+        await webRTCService.stopScreenShare(selectedUser.id);
+        screenVideoRef.current.srcObject = null;
+        setIsScreenSharing(false);
+      }
+    } catch (error) {
+      console.error('Screen sharing error:', error);
+    }
+  };
 
   useEffect(() => {
     // Load chat history when user is selected
@@ -80,18 +99,56 @@ const ChatWindow = ({ selectedUser }) => {
       console.error("Socket error:", error);
     });
 
+    sock.on('screen-sharing-started', () => {
+      // Show remote screen sharing video
+      if (screenVideoRef.current) {
+        screenVideoRef.current.srcObject = webRTCService.remoteStream;
+      }
+    });
+
+    sock.on('screen-sharing-stopped', () => {
+      if (screenVideoRef.current) {
+        screenVideoRef.current.srcObject = null;
+      }
+    });
+
     return () => {
       sock.off('private_message', handleIncoming);
       sock.off('error');
+      sock.off('screen-sharing-started');
+      sock.off('screen-sharing-stopped');
     };
   }, [selectedUser, storedUser]);
-  
 
   return (
     <div className="flex flex-col flex-1 p-4 bg-white rounded shadow h-full">
       <h2 className="text-xl font-semibold mb-4 border-b pb-2">
         Chat with {selectedUser?.name || 'Select a friend'}
       </h2>
+
+      {/* Screen sharing video */}
+      <div className="mb-4">
+        <video
+          ref={screenVideoRef}
+          autoPlay
+          playsInline
+          className={`w-full bg-black rounded ${!isScreenSharing && 'hidden'}`}
+        />
+      </div>
+
+      {/* Screen sharing controls */}
+      <div className="mb-4">
+        <button
+          onClick={handleScreenShare}
+          className={`px-4 py-2 rounded ${
+            isScreenSharing 
+              ? 'bg-red-500 hover:bg-red-600' 
+              : 'bg-green-500 hover:bg-green-600'
+          } text-white`}
+        >
+          {isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
+        </button>
+      </div>
 
       <div className="flex-1 overflow-y-auto space-y-2 mb-4">
         {messages.map((msg, idx) => (
