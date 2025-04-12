@@ -23,16 +23,17 @@ export const initSocket = () => {
     return null;
   }
 
-  socket = io("http://192.168.1.3:5000", {
-    query: { 
-      token: storedUser.token,
-      userId: storedUser.id  // Add user ID as additional query param
-    },
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000
+    socket = io("https://eirem.onrender.com", {
+      query: { 
+        token: storedUser.token,
+        userId: storedUser.id
+      },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
   });
+
 
   socket.on('connect', () => {
     console.log('Socket connected successfully');
