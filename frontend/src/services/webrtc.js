@@ -17,7 +17,6 @@ class WebRTCService {
         const iceServers = await this.getMeteredTurnServers();
         this.peerConnection = new RTCPeerConnection({ iceServers });
 
-        // ICE candidate handling
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 this.socket.emit('ice-candidate', {
@@ -27,7 +26,6 @@ class WebRTCService {
             }
         };
 
-        // Track remote stream
         this.peerConnection.ontrack = (event) => {
             this.remoteStream = event.streams[0];
             if (this.onRemoteStreamAvailable) {
@@ -35,7 +33,6 @@ class WebRTCService {
             }
         };
 
-        // Debug logs
         this.peerConnection.onconnectionstatechange = () => {
             console.log('Connection state:', this.peerConnection.connectionState);
         };
@@ -72,6 +69,8 @@ class WebRTCService {
                 video: true,
                 audio: true
             });
+
+            this.localStream = screenStream; // ✅ Fix: Save local screen stream
 
             screenStream.getTracks().forEach(track => {
                 this.peerConnection.addTrack(track, screenStream);
