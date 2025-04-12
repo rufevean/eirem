@@ -1,6 +1,5 @@
-// src/services/socket.js
-
 import { io } from "socket.io-client";
+import webRTCService from './webrtc';  // Make sure the path is correct
 
 let socket = null;
 
@@ -23,17 +22,16 @@ export const initSocket = () => {
     return null;
   }
 
-      socket = io("https://eirem.onrender.com", {
-        query: { 
-          token: storedUser.token,
-          userId: storedUser.id
-        },
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000
-    });
-
+  socket = io("https://eirem.onrender.com", {
+    query: { 
+      token: storedUser.token,
+      userId: storedUser.id
+    },
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000
+  });
 
   socket.on('connect', () => {
     console.log('Socket connected successfully');
