@@ -29,6 +29,7 @@ class WebRTCService {
         this.socket = socketInstance;
         this.onRemoteStreamAvailable = null;
         this.currentTargetUser = null;
+        this.userId = JSON.parse(localStorage.getItem('user'))?.id;
 
         if (!this.socket) {
             throw new Error('Socket connection not available');
@@ -90,9 +91,11 @@ class WebRTCService {
     }
 
     async startScreenShare(targetUserId) {
-        this.currentTargetUser = targetUserId;
-
         try {
+            if (!this.userId) {
+                throw new Error('No user ID available');
+            }
+            this.currentTargetUser = targetUserId;
             await this.initializePeerConnection();
             const screenStream = await navigator.mediaDevices.getDisplayMedia({
                 video: true,
@@ -108,6 +111,7 @@ class WebRTCService {
             await this.peerConnection.setLocalDescription(offer);
             this.socket.emit('screen-share-offer', {
                 targetUserId,
+                fromUserId: this.userId,
                 offer
             });
 
@@ -117,7 +121,8 @@ class WebRTCService {
 
             return screenStream;
         } catch (error) {
-            console.error('Error in startScreenShare:', error);
+            console.error('[WebRTC] Error in startScreenShare:', error);
+            this.cleanup();
             throw error;
         }
     }
@@ -148,11 +153,10 @@ class WebRTCService {
         }
     }
 
-    async handleIncomingOffer(offer, targetUserId) {
-        this.currentTargetUser = targetUserId;
-        
+    async handleIncomingOffer(offer, fromUserId) {
         try {
-            console.log('[WebRTC] Handling incoming offer:', offer);
+            console.log('[WebRTC] Handling incoming offer from:', fromUserId);
+            this.currentTargetUser = fromUserId;  // Set sender as target for answer
             await this.initializePeerConnection();
 
             console.log('[WebRTC] Setting remote description');
@@ -164,9 +168,10 @@ class WebRTCService {
             console.log('[WebRTC] Setting local description');
             await this.peerConnection.setLocalDescription(answer);
 
-            console.log('[WebRTC] Sending answer to:', targetUserId);
+            console.log('[WebRTC] Sending answer to:', fromUserId);
             this.socket.emit('screen-share-answer', {
-                targetUserId,
+                targetUserId: fromUserId,
+                fromUserId: this.userId,
                 answer
             });
             

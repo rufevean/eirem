@@ -57,20 +57,28 @@ export const initSocket = () => {
 
   socket.on('screen-share-offer', async (data) => {
     console.log('[Socket] Received screen-share-offer:', data);
-    const { offer, targetUserId, from } = data;
+    const { offer, fromUserId } = data;
 
     try {
         if (!webRTCService) {
             throw new Error('WebRTC service not initialized');
         }
         
-        // Set current target user to the sender's ID for the response
-        webRTCService.currentTargetUser = from;
-        await webRTCService.handleIncomingOffer(offer, from);
+        await webRTCService.handleIncomingOffer(offer, fromUserId);
     } catch (error) {
         console.error('[Socket] Error handling screen share offer:', error);
+        socket.emit('error', { message: error.message });
     }
-  });
+});
+
+socket.on('error', (error) => {
+    console.error('[Socket] Error:', error);
+    // Attempt to restart connection if needed
+    const webRTCService = getWebRTCService();
+    if (webRTCService) {
+        webRTCService.restartConnection();
+    }
+});
 
   return socket;
 };

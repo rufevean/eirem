@@ -94,39 +94,38 @@ def register_socketio_events(socketio):
 
     @socketio.on('screen-share-offer')
     def handle_screen_share_offer(data):
-        print(f"[WebRTC] Received offer from {request.sid}")
+        print(f"[WebRTC] Received offer data: {data}")
+        from_user_id = data.get('fromUserId')
+        target_user_id = str(data.get('targetUserId'))
         
-        # Find sender's user ID
-        from_user_id = None
-        for uid, sid in connected_users.items():
-            if sid == request.sid:
-                from_user_id = uid
-                break
-        
-        target_sid = connected_users.get(str(data['targetUserId']))
-        if target_sid and from_user_id:
-            print(f"[WebRTC] Forwarding offer from {from_user_id} to {target_sid}")
+        if not from_user_id or not target_user_id:
+            print("[WebRTC] Missing user IDs")
+            emit('error', {'message': 'Invalid user IDs'}, room=request.sid)
+            return
+
+        target_sid = connected_users.get(target_user_id)
+        if target_sid:
+            print(f"[WebRTC] Forwarding offer from {from_user_id} to {target_user_id}")
             emit('screen-share-offer', {
                 'offer': data['offer'],
-                'targetUserId': data['targetUserId'],
-                'from': from_user_id
+                'fromUserId': from_user_id
             }, room=target_sid)
         else:
-            print(f"[WebRTC] Target user not found or sender unknown")
-            emit('error', {'message': 'Failed to establish connection'}, room=request.sid)
+            print(f"[WebRTC] Target user {target_user_id} not found")
+            emit('error', {'message': 'Target user not connected'}, room=request.sid)
 
     @socketio.on('screen-share-answer')
     def handle_screen_share_answer(data):
-        print(f"[WebRTC] Received answer for target user ID: {data.get('targetUserId')}")
-        print(f"[WebRTC] Answer: {data.get('answer')}")
+        print(f"[WebRTC] Received answer data: {data}")
         target_sid = connected_users.get(str(data['targetUserId']))
+        
         if target_sid:
-            print(f"[WebRTC] Forwarding answer to {target_sid}")
             emit('screen-share-answer', {
-                'answer': data['answer']
+                'answer': data['answer'],
+                'fromUserId': data.get('fromUserId')
             }, room=target_sid)
         else:
-            print(f"[WebRTC] Target user not found: {data['targetUserId']}")
+            emit('error', {'message': 'Target user not connected'}, room=request.sid)
 
     @socketio.on('ice-candidate')
     def handle_ice_candidate(data):
