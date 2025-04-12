@@ -19,24 +19,44 @@ const ICE_SERVERS = {
 
 class WebRTCService {
     constructor() {
+        if (!navigator.mediaDevices || !window.RTCPeerConnection) {
+            throw new Error('WebRTC is not supported in this browser');
+        }
+        
         this.peerConnection = null;
         this.localStream = null;
         this.remoteStream = new MediaStream();
         this.socket = getSocket();
         this.onRemoteStreamAvailable = null;
         this.currentTargetUser = null;
+
+        if (!this.socket) {
+            throw new Error('Socket connection not available');
+        }
     }
 
     async initializePeerConnection() {
-        this.cleanup();
-        
-        this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
+        try {
+            this.cleanup();
+            
+            this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
+            
+            // Add connection state logging
+            this.setupConnectionStateHandlers();
+            
+            return this.peerConnection;
+        } catch (error) {
+            console.error('Failed to initialize peer connection:', error);
+            throw error;
+        }
+    }
 
-        // Log all state changes
+    setupConnectionStateHandlers() {
+        if (!this.peerConnection) return;
+
         this.peerConnection.oniceconnectionstatechange = () => {
             console.log('ICE Connection State:', this.peerConnection.iceConnectionState);
             if (this.peerConnection.iceConnectionState === 'failed') {
-                // Attempt ICE restart
                 this.restartConnection();
             }
         };
@@ -45,24 +65,6 @@ class WebRTCService {
             console.log('Connection State:', this.peerConnection.connectionState);
             if (this.peerConnection.connectionState === 'failed') {
                 this.restartConnection();
-            }
-        };
-
-        this.peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                console.log('New ICE candidate:', event.candidate.type);
-                this.socket.emit('ice-candidate', {
-                    candidate: event.candidate,
-                    targetUserId: this.currentTargetUser
-                });
-            }
-        };
-
-        this.peerConnection.ontrack = (event) => {
-            console.log('Received remote track');
-            this.remoteStream = event.streams[0];
-            if (this.onRemoteStreamAvailable) {
-                this.onRemoteStreamAvailable(this.remoteStream);
             }
         };
     }
@@ -219,4 +221,23 @@ class WebRTCService {
     }
 }
 
-export default new WebRTCService();
+// Export as singleton instance with error handling
+let webRTCServiceInstance = null;
+
+try {
+    webRTCServiceInstance = new WebRTCService();
+} catch (error) {
+    console.error('Failed to initialize WebRTC service:', error);
+    // Provide a mock service for graceful degradation
+    webRTCServiceInstance = {
+        initializePeerConnection: () => Promise.reject(new Error('WebRTC not supported')),
+        startScreenShare: () => Promise.reject(new Error('WebRTC not supported')),
+        stopScreenShare: () => Promise.reject(new Error('WebRTC not supported')),
+        handleIncomingOffer: () => Promise.reject(new Error('WebRTC not supported')),
+        handleAnswer: () => Promise.reject(new Error('WebRTC not supported')),
+        handleIceCandidate: () => Promise.reject(new Error('WebRTC not supported')),
+        cleanup: () => {}
+    };
+}
+
+export default webRTCServiceInstance;

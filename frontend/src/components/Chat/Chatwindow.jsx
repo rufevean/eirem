@@ -66,19 +66,35 @@ const ChatWindow = ({ selectedUser }) => {
 
   const handleScreenShare = async () => {
     try {
-      if (!isScreenSharing) {
-        const screenStream = await webRTCService.startScreenShare(selectedUser.id);
-        screenVideoRef.current.srcObject = screenStream;
-        setIsScreenSharing(true);
-      } else {
-        await webRTCService.stopScreenShare(selectedUser.id);
-        screenVideoRef.current.srcObject = null;
-        setIsScreenSharing(false);
-      }
+        if (!webRTCService) {
+            throw new Error('WebRTC service not available');
+        }
+
+        if (!selectedUser?.id) {
+            throw new Error('No user selected');
+        }
+
+        if (!isScreenSharing) {
+            const screenStream = await webRTCService.startScreenShare(selectedUser.id);
+            if (!screenVideoRef.current) {
+                throw new Error('Video element not found');
+            }
+            screenVideoRef.current.srcObject = screenStream;
+            setIsScreenSharing(true);
+        } else {
+            await webRTCService.stopScreenShare(selectedUser.id);
+            if (screenVideoRef.current) {
+                screenVideoRef.current.srcObject = null;
+            }
+            setIsScreenSharing(false);
+        }
     } catch (error) {
-      console.error('Screen sharing error:', error);
+        console.error('Screen sharing error:', error);
+        setIsScreenSharing(false);
+        // Show error to user
+        alert(`Screen sharing failed: ${error.message}`);
     }
-  };
+};
 
   const handleAcceptStream = () => {
     if (webRTCService.remoteStream && screenVideoRef.current) {
@@ -163,6 +179,69 @@ const ChatWindow = ({ selectedUser }) => {
       sock.off('ice-candidate');
     };
   }, [selectedUser, storedUser]);
+
+  useEffect(() => {
+    // Ensure WebRTC service is imported and available
+    if (!webRTCService) {
+        console.error('WebRTC service not initialized');
+        return;
+    }
+
+    const sock = getSocket();
+    if (!sock) {
+        console.error('Socket not connected');
+        return;
+    }
+
+    // Socket event handlers with error boundaries
+    const socketHandlers = {
+        'screen-share-offer': async (data) => {
+            try {
+                console.log('Received screen share offer:', data);
+                if (!data?.offer || !selectedUser?.id) {
+                    throw new Error('Invalid offer data or user ID');
+                }
+                await webRTCService.handleIncomingOffer(data.offer, selectedUser.id);
+            } catch (error) {
+                console.error('Error handling screen share offer:', error);
+            }
+        },
+        'screen-share-answer': async (data) => {
+            try {
+                console.log('Received screen share answer:', data);
+                if (!data?.answer) {
+                    throw new Error('Invalid answer data');
+                }
+                await webRTCService.handleAnswer(data.answer);
+            } catch (error) {
+                console.error('Error handling screen share answer:', error);
+            }
+        },
+        'ice-candidate': async (data) => {
+            try {
+                console.log('Received ICE candidate:', data);
+                if (!data?.candidate) {
+                    throw new Error('Invalid ICE candidate');
+                }
+                await webRTCService.handleIceCandidate(data.candidate);
+            } catch (error) {
+                console.error('Error handling ICE candidate:', error);
+            }
+        }
+    };
+
+    // Register event handlers
+    Object.entries(socketHandlers).forEach(([event, handler]) => {
+        sock.on(event, handler);
+    });
+
+    // Cleanup
+    return () => {
+        Object.keys(socketHandlers).forEach((event) => {
+            sock.off(event);
+        });
+    };
+}, [selectedUser, webRTCService]);
 
   return (
     <div className="flex flex-col flex-1 p-4 bg-white rounded shadow h-full">
