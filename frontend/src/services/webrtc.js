@@ -1,13 +1,20 @@
 import { getSocket } from './socket';
 
-const EXPRESS_TURN_CREDENTIALS = {
+const ICE_SERVERS = {
     iceServers: [
+        {
+            urls: [
+                'stun:stun1.l.google.com:19302',
+                'stun:stun2.l.google.com:19302'
+            ]
+        },
         {
             urls: 'turn:relay1.expressturn.com:3478',
             username: 'efG45XZ8SUYCNIDODZ',
             credential: '1WR9yaEat5UIfHYe'
         }
-    ]
+    ],
+    iceCandidatePoolSize: 10
 };
 
 class WebRTCService {
@@ -21,16 +28,29 @@ class WebRTCService {
     }
 
     async initializePeerConnection() {
-        // Cleanup existing connection
-        if (this.peerConnection) {
-            this.peerConnection.close();
-        }
+        this.cleanup();
         
-        // Using ExpressTURN credentials for ICE servers
-        this.peerConnection = new RTCPeerConnection(EXPRESS_TURN_CREDENTIALS);
+        this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
+
+        // Log all state changes
+        this.peerConnection.oniceconnectionstatechange = () => {
+            console.log('ICE Connection State:', this.peerConnection.iceConnectionState);
+            if (this.peerConnection.iceConnectionState === 'failed') {
+                // Attempt ICE restart
+                this.restartConnection();
+            }
+        };
+
+        this.peerConnection.onconnectionstatechange = () => {
+            console.log('Connection State:', this.peerConnection.connectionState);
+            if (this.peerConnection.connectionState === 'failed') {
+                this.restartConnection();
+            }
+        };
 
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
+                console.log('New ICE candidate:', event.candidate.type);
                 this.socket.emit('ice-candidate', {
                     candidate: event.candidate,
                     targetUserId: this.currentTargetUser
@@ -39,26 +59,11 @@ class WebRTCService {
         };
 
         this.peerConnection.ontrack = (event) => {
-            console.log('Received remote track:', event.streams[0]);
+            console.log('Received remote track');
             this.remoteStream = event.streams[0];
-            // Trigger immediate UI update
             if (this.onRemoteStreamAvailable) {
                 this.onRemoteStreamAvailable(this.remoteStream);
             }
-        };
-
-        // Add logging for connection state changes
-        this.peerConnection.onconnectionstatechange = () => {
-            console.log('Connection state:', this.peerConnection.connectionState);
-            if (this.peerConnection.connectionState === 'failed') {
-                this.peerConnection.restartIce();
-            }
-        };
-        this.peerConnection.oniceconnectionstatechange = () => {
-            console.log('ICE connection state:', this.peerConnection.iceConnectionState);
-        };
-        this.peerConnection.onsignalingstatechange = () => {
-            console.log('Signaling state:', this.peerConnection.signalingState);
         };
     }
 
@@ -159,14 +164,42 @@ class WebRTCService {
 
     async handleIceCandidate(candidate) {
         try {
-            if (this.peerConnection && this.peerConnection.remoteDescription) {
-                await this.peerConnection.addIceCandidate(candidate);
-                console.log('Added ICE candidate');
-            } else {
-                console.warn('Remote description not set yet');
+            if (!this.peerConnection) {
+                console.warn('No peer connection available');
+                return;
             }
+
+            if (!this.peerConnection.remoteDescription) {
+                console.warn('Waiting for remote description...');
+                // Queue the candidate for later if remote description isn't set
+                setTimeout(() => this.handleIceCandidate(candidate), 1000);
+                return;
+            }
+
+            await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log('Successfully added ICE candidate');
         } catch (error) {
             console.error('Error adding ICE candidate:', error);
+        }
+    }
+
+    async restartConnection() {
+        console.log('Attempting to restart connection...');
+        
+        if (!this.peerConnection) return;
+        
+        try {
+            // Create and set new offer with iceRestart: true
+            const offer = await this.peerConnection.createOffer({ iceRestart: true });
+            await this.peerConnection.setLocalDescription(offer);
+            
+            this.socket.emit('screen-share-offer', {
+                targetUserId: this.currentTargetUser,
+                offer
+            });
+        } catch (error) {
+            console.error('Error restarting connection:', error);
+            this.cleanup();
         }
     }
 

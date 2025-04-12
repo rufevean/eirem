@@ -12,12 +12,19 @@ const ChatWindow = ({ selectedUser }) => {
   const screenVideoRef = useRef(null);
   useEffect(() => {
     webRTCService.onRemoteStreamAvailable = (stream) => {
+        console.log('Remote stream received in ChatWindow');
         if (screenVideoRef.current) {
             screenVideoRef.current.srcObject = stream;
+            screenVideoRef.current.play().catch(err => {
+                console.error('Error playing video:', err);
+            });
         }
     };
     
     return () => {
+        if (screenVideoRef.current) {
+            screenVideoRef.current.srcObject = null;
+        }
         webRTCService.cleanup();
     };
 }, []);
