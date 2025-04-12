@@ -1,6 +1,7 @@
 // src/services/socket.js
 
 import { io } from "socket.io-client";
+import webRTCService from './webrtc';
 
 let socket = null;
 
@@ -55,10 +56,10 @@ export const initSocket = () => {
     console.log('Received screen-share-offer:', data);
     const { offer, targetUserId } = data;
 
-    if (webRTCService) {
-        await webRTCService.handleIncomingOffer(offer, targetUserId);
-    } else {
-        console.error('WebRTCService is not initialized');
+    try {
+      await webRTCService.handleIncomingOffer(offer, targetUserId);
+    } catch (error) {
+      console.error('Error handling screen share offer:', error);
     }
   });
 
