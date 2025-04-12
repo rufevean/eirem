@@ -41,6 +41,26 @@ class WebRTCService {
             
             this.peerConnection = new RTCPeerConnection(ICE_SERVERS);
             
+            // Add ontrack handler for remote streams
+            this.peerConnection.ontrack = (event) => {
+                console.log('Received remote track:', event.streams[0]);
+                this.remoteStream = event.streams[0];
+                if (this.onRemoteStreamAvailable) {
+                    this.onRemoteStreamAvailable(this.remoteStream);
+                }
+            };
+
+            // Add onicecandidate handler
+            this.peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log('New ICE candidate:', event.candidate.type);
+                    this.socket.emit('ice-candidate', {
+                        candidate: event.candidate,
+                        targetUserId: this.currentTargetUser
+                    });
+                }
+            };
+            
             // Add connection state logging
             this.setupConnectionStateHandlers();
             
@@ -131,11 +151,10 @@ class WebRTCService {
     async handleIncomingOffer(offer, targetUserId) {
         this.currentTargetUser = targetUserId;
         
-        // Cleanup and initialize new connection
-        this.cleanup();
-        await this.initializePeerConnection();
-
         try {
+            // Cleanup and initialize new connection
+            await this.initializePeerConnection();
+
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
             
             // Create and set local answer
