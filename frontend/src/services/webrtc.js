@@ -1,7 +1,14 @@
 import { getSocket } from './socket';
 
-const METERED_API_KEY = "6de5699cc9b05e26a005193be6aada75ae39";
-const METERED_DOMAIN = "eirem.metered.live";
+const EXPRESS_TURN_CREDENTIALS = {
+    iceServers: [
+        {
+            urls: 'turn:relay1.expressturn.com:3478',
+            username: 'efG45XZ8SUYCNIDODZ',
+            credential: '1WR9yaEat5UIfHYe'
+        }
+    ]
+};
 
 class WebRTCService {
     constructor() {
@@ -14,8 +21,8 @@ class WebRTCService {
     }
 
     async initializePeerConnection() {
-        const iceServers = await this.getMeteredTurnServers();
-        this.peerConnection = new RTCPeerConnection({ iceServers });
+        // Using ExpressTURN credentials for ICE servers
+        this.peerConnection = new RTCPeerConnection(EXPRESS_TURN_CREDENTIALS);
 
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
@@ -42,21 +49,6 @@ class WebRTCService {
         this.peerConnection.onsignalingstatechange = () => {
             console.log('Signaling state:', this.peerConnection.signalingState);
         };
-    }
-
-    async getMeteredTurnServers() {
-        try {
-            const response = await fetch(`https://${METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`);
-            const iceServers = await response.json();
-            console.log("Using Metered TURN servers:", iceServers);
-            return iceServers;
-        } catch (error) {
-            console.error("Error fetching Metered TURN servers:", error);
-            return [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ];
-        }
     }
 
     async startScreenShare(targetUserId) {
