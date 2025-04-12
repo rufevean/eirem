@@ -17,7 +17,7 @@ const ChatWindow = ({ selectedUser }) => {
         console.log('Remote stream received in ChatWindow');
         if (screenVideoRef.current) {
             screenVideoRef.current.srcObject = stream;
-            screenVideoRef.current.muted = true; // Prevent audio feedback
+            screenVideoRef.current.muted = false; // Allow audio if available
             screenVideoRef.current.play().catch(err => {
                 console.error('Error playing video:', err);
             });
@@ -218,8 +218,8 @@ const ChatWindow = ({ selectedUser }) => {
           ref={screenVideoRef}
           autoPlay
           playsInline
-          muted
           className={`w-full bg-black rounded ${!isScreenSharing && !isStreamAccepted ? 'hidden' : ''}`}
+          style={{ maxHeight: '70vh' }}
         />
       </div>
 

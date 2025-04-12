@@ -127,6 +127,14 @@ class WebRTCService {
                 this.peerConnection.addTrack(track, screenStream);
             });
 
+            // Notify that screen sharing has started with stream info
+            this.socket.emit('screen-sharing-started', {
+                targetUserId,
+                fromUserId: this.userId,
+                hasAudio: screenStream.getAudioTracks().length > 0,
+                hasVideo: screenStream.getVideoTracks().length > 0
+            });
+
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
             

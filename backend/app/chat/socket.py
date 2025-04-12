@@ -79,10 +79,17 @@ def register_socketio_events(socketio):
     @socketio.on('screen-sharing-started')
     def handle_screen_sharing_started(data):
         """Handle screen sharing start event"""
-        if 'targetUserId' in data:
-            target_sid = connected_users.get(str(data['targetUserId']))
-            if target_sid:
-                emit('screen-sharing-started', room=target_sid)
+        target_user_id = str(data.get('targetUserId'))
+        from_user_id = str(data.get('fromUserId'))
+        target_sid = connected_users.get(target_user_id)
+        
+        if target_sid:
+            emit('screen-sharing-started', {
+                'fromUserId': from_user_id,
+                'hasAudio': data.get('hasAudio', False),
+                'hasVideo': data.get('hasVideo', True)
+            }, room=target_sid)
+            print(f"[WebRTC] Screen sharing started from {from_user_id} to {target_user_id}")
 
     @socketio.on('screen-sharing-stopped')
     def handle_screen_sharing_stopped(data):
