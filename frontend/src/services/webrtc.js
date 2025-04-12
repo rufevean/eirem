@@ -1,61 +1,71 @@
 import { getSocket } from './socket';
 
+const METERED_API_KEY = "6de5699cc9b05e26a005193be6aada75ae39";
+const METERED_DOMAIN = "eirem.metered.live";
+
 class WebRTCService {
     constructor() {
-        this.configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        };
-        this.peerConnection = new RTCPeerConnection(this.configuration);
+        this.peerConnection = null;
         this.localStream = null;
-        this.socket = getSocket();
         this.remoteStream = new MediaStream();
-        
-        // Setup ICE handling
+        this.socket = getSocket();
+        this.onRemoteStreamAvailable = null;
+        this.currentTargetUser = null;
+    }
+
+    async initializePeerConnection() {
+        const iceServers = await this.getMeteredTurnServers();
+        this.peerConnection = new RTCPeerConnection({ iceServers });
+
+        // ICE candidate handling
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
-                console.log('Sending ICE candidate');
-                this.socket.emit('ice-candidate', { 
+                this.socket.emit('ice-candidate', {
                     candidate: event.candidate,
-                    targetUserId: this.currentTargetUser 
+                    targetUserId: this.currentTargetUser
                 });
             }
         };
-        this.onRemoteStreamAvailable = null;
 
+        // Track remote stream
         this.peerConnection.ontrack = (event) => {
-            console.log('Received remote stream');
             this.remoteStream = event.streams[0];
             if (this.onRemoteStreamAvailable) {
                 this.onRemoteStreamAvailable(this.remoteStream);
             }
         };
-        
-        // Handle incoming tracks
-        this.peerConnection.ontrack = (event) => {
-            console.log('Received remote stream');
-            this.remoteStream = event.streams[0];
-        };
 
-        // Enhanced debugging for connection state
+        // Debug logs
         this.peerConnection.onconnectionstatechange = () => {
             console.log('Connection state:', this.peerConnection.connectionState);
         };
-
         this.peerConnection.oniceconnectionstatechange = () => {
             console.log('ICE connection state:', this.peerConnection.iceConnectionState);
         };
-
         this.peerConnection.onsignalingstatechange = () => {
             console.log('Signaling state:', this.peerConnection.signalingState);
         };
     }
 
+    async getMeteredTurnServers() {
+        try {
+            const response = await fetch(`https://${METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${METERED_API_KEY}`);
+            const iceServers = await response.json();
+            console.log("Using Metered TURN servers:", iceServers);
+            return iceServers;
+        } catch (error) {
+            console.error("Error fetching Metered TURN servers:", error);
+            return [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ];
+        }
+    }
+
     async startScreenShare(targetUserId) {
-        console.log('Starting screen share for user:', targetUserId);
-        this.currentTargetUser = targetUserId; // Store current target
+        this.currentTargetUser = targetUserId;
+
+        if (!this.peerConnection) await this.initializePeerConnection();
 
         try {
             const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -63,25 +73,18 @@ class WebRTCService {
                 audio: true
             });
 
-            // Add tracks to peer connection
             screenStream.getTracks().forEach(track => {
                 this.peerConnection.addTrack(track, screenStream);
             });
 
-            // Create and send offer
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
-            
-            console.log('Created offer:', offer);
-            console.log('Local description set');
-            
+
             this.socket.emit('screen-share-offer', {
                 targetUserId,
-                offer: offer
+                offer
             });
-            console.log('Offer sent to user:', targetUserId);
 
-            // Handle screen share stop
             screenStream.getVideoTracks()[0].onended = () => {
                 this.stopScreenShare(targetUserId);
             };
@@ -99,12 +102,12 @@ class WebRTCService {
                 const videoTrack = this.localStream.getVideoTracks()[0];
                 const senders = this.peerConnection.getSenders();
                 const videoSender = senders.find(sender => sender.track?.kind === 'video');
-                
+
                 if (videoSender && videoTrack) {
                     videoSender.replaceTrack(videoTrack);
                 }
             }
-            
+
             this.socket.emit('screen-sharing-stopped', { targetUserId });
         } catch (error) {
             console.error('Error stopping screen share:', error);
@@ -113,21 +116,18 @@ class WebRTCService {
     }
 
     async handleIncomingOffer(offer, targetUserId) {
-        console.log('Handling incoming offer from:', targetUserId);
-        console.log('Offer:', offer);
-        
+        this.currentTargetUser = targetUserId;
+
+        if (!this.peerConnection) await this.initializePeerConnection();
+
         try {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
-            
-            console.log('Remote description set');
-            console.log('Answer created:', answer);
-            console.log('Local description set');
-            
+
             this.socket.emit('screen-share-answer', {
                 targetUserId,
-                answer: answer
+                answer
             });
         } catch (error) {
             console.error('Error in handleIncomingOffer:', error);
@@ -146,11 +146,11 @@ class WebRTCService {
 
     async handleIceCandidate(candidate) {
         try {
-            if (this.peerConnection.remoteDescription) {
+            if (this.peerConnection && this.peerConnection.remoteDescription) {
                 await this.peerConnection.addIceCandidate(candidate);
                 console.log('Added ICE candidate');
             } else {
-                console.error('Cannot add ICE candidate without remote description');
+                console.warn('Remote description not set yet');
             }
         } catch (error) {
             console.error('Error adding ICE candidate:', error);
