@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getSocket, getWebRTCService } from '../../services/socket.js';
-import webRTCService from '../../services/webrtc.js';
 import API from '../../services/api';
 
 const ChatWindow = ({ selectedUser }) => {
@@ -11,6 +10,9 @@ const ChatWindow = ({ selectedUser }) => {
   const [isStreamAccepted, setIsStreamAccepted] = useState(false);
   const screenVideoRef = useRef(null);
   useEffect(() => {
+    const webRTCService = getWebRTCService();
+    if (!webRTCService) return;
+    
     webRTCService.onRemoteStreamAvailable = (stream) => {
         console.log('Remote stream received in ChatWindow');
         if (screenVideoRef.current) {
@@ -100,6 +102,12 @@ const ChatWindow = ({ selectedUser }) => {
 };
 
   const handleAcceptStream = () => {
+    const webRTCService = getWebRTCService();
+    if (!webRTCService) {
+      console.error('WebRTC service not available');
+      return;
+    }
+    
     if (webRTCService.remoteStream && screenVideoRef.current) {
       screenVideoRef.current.srcObject = webRTCService.remoteStream;
       setIsStreamAccepted(true);
@@ -185,6 +193,7 @@ const ChatWindow = ({ selectedUser }) => {
 
   useEffect(() => {
     // Ensure WebRTC service is imported and available
+    const webRTCService = getWebRTCService();
     if (!webRTCService) {
         console.error('WebRTC service not initialized');
         return;
