@@ -1,9 +1,10 @@
 // src/services/socket.js
 
 import { io } from "socket.io-client";
-import webRTCService from './webrtc';
+import { createWebRTCService } from './webrtc';
 
 let socket = null;
+let webRTCService = null;
 
 export const initSocket = () => {
   const storedUser = JSON.parse(localStorage.getItem("user"));
@@ -35,6 +36,8 @@ export const initSocket = () => {
         reconnectionDelay: 1000
     });
 
+  // Initialize WebRTC service after socket is created
+  webRTCService = createWebRTCService(socket);
 
   socket.on('connect', () => {
     console.log('Socket connected successfully');
@@ -57,6 +60,9 @@ export const initSocket = () => {
     const { offer, targetUserId } = data;
 
     try {
+      if (!webRTCService) {
+        throw new Error('WebRTC service not initialized');
+      }
       await webRTCService.handleIncomingOffer(offer, targetUserId);
     } catch (error) {
       console.error('Error handling screen share offer:', error);
@@ -75,3 +81,5 @@ export const getSocket = () => {
 
 // Remove the default export and export initSocket as connectSocket
 export const connectSocket = initSocket;
+
+export const getWebRTCService = () => webRTCService;

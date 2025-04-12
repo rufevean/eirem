@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getSocket } from '../../services/socket.js';
+import { getSocket, getWebRTCService } from '../../services/socket.js';
 import webRTCService from '../../services/webrtc.js';
 import API from '../../services/api';
 
@@ -68,6 +68,7 @@ const ChatWindow = ({ selectedUser }) => {
 
   const handleScreenShare = async () => {
     try {
+        const webRTCService = getWebRTCService();
         if (!webRTCService) {
             throw new Error('WebRTC service not available');
         }
