@@ -97,11 +97,31 @@ class WebRTCService {
             }
             this.currentTargetUser = targetUserId;
             await this.initializePeerConnection();
+            
+            // Save ICE candidates to send after remote description is set
+            this.pendingCandidates = [];
+            this.peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    if (this.peerConnection.remoteDescription) {
+                        this.socket.emit('ice-candidate', {
+                            candidate: event.candidate,
+                            targetUserId: this.currentTargetUser,
+                            fromUserId: this.userId
+                        });
+                    } else {
+                        this.pendingCandidates.push(event.candidate);
+                    }
+                }
+            };
+
             const screenStream = await navigator.mediaDevices.getDisplayMedia({
                 video: true,
-                audio: true
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true
+                }
             });
-            this.localStream = screenStream; // ✅ Fix: Save local screen stream
+            this.localStream = screenStream;
 
             screenStream.getTracks().forEach(track => {
                 this.peerConnection.addTrack(track, screenStream);
@@ -109,6 +129,8 @@ class WebRTCService {
 
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
+            
+            console.log('[WebRTC] Sending offer to:', targetUserId);
             this.socket.emit('screen-share-offer', {
                 targetUserId,
                 fromUserId: this.userId,
@@ -190,30 +212,36 @@ class WebRTCService {
             }
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
             console.log('[WebRTC] Successfully set remote description from answer');
+
+            // Send any pending ICE candidates
+            if (this.pendingCandidates?.length > 0) {
+                console.log('[WebRTC] Sending pending ICE candidates');
+                this.pendingCandidates.forEach(candidate => {
+                    this.socket.emit('ice-candidate', {
+                        candidate,
+                        targetUserId: this.currentTargetUser,
+                        fromUserId: this.userId
+                    });
+                });
+                this.pendingCandidates = [];
+            }
         } catch (error) {
             console.error('[WebRTC] Error handling answer:', error);
             throw error;
         }
     }
 
-    async handleIceCandidate(candidate) {
+    async handleIceCandidate(candidate, fromUserId) {
         try {
             if (!this.peerConnection) {
-                console.warn('No peer connection available');
-                return;
-            }
-
-            if (!this.peerConnection.remoteDescription) {
-                console.warn('Waiting for remote description...');
-                // Queue the candidate for later if remote description isn't set
-                setTimeout(() => this.handleIceCandidate(candidate), 1000);
+                console.warn('[WebRTC] No peer connection available');
                 return;
             }
 
             await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-            console.log('Successfully added ICE candidate');
+            console.log('[WebRTC] Successfully added ICE candidate from:', fromUserId);
         } catch (error) {
-            console.error('Error adding ICE candidate:', error);
+            console.error('[WebRTC] Error adding ICE candidate:', error);
         }
     }
 

@@ -129,13 +129,12 @@ def register_socketio_events(socketio):
 
     @socketio.on('ice-candidate')
     def handle_ice_candidate(data):
-        print(f"[WebRTC] Forwarding ICE candidate: {data.get('candidate')}")
-        print(f"[WebRTC] Target user ID: {data.get('targetUserId')}")
+        print(f"[WebRTC] Forwarding ICE candidate from {data.get('fromUserId')}")
         target_sid = connected_users.get(str(data['targetUserId']))
         if target_sid:
-            print(f"[WebRTC] Forwarding ICE candidate to SID: {target_sid}")
             emit('ice-candidate', {
-                'candidate': data['candidate']
+                'candidate': data['candidate'],
+                'fromUserId': data['fromUserId']
             }, room=target_sid)
         else:
             print(f"[WebRTC] Target user not found for ICE candidate")

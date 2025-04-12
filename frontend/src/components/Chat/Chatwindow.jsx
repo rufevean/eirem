@@ -166,12 +166,17 @@ const ChatWindow = ({ selectedUser }) => {
     });
 
     sock.on('screen-share-offer', async (data) => {
-      console.log('Received screen share offer:', data);
-      const webRTCService = getWebRTCService();
-      if (webRTCService) {
-        await webRTCService.handleIncomingOffer(data.offer, selectedUser.id);
+      console.log('[Socket] Received screen-share-offer:', data);
+      const { offer, fromUserId } = data;
+      
+      if (webRTCService && fromUserId) {
+          try {
+              await webRTCService.handleIncomingOffer(offer, fromUserId);
+          } catch (error) {
+              console.error('[Socket] Error handling offer:', error);
+          }
       }
-    });
+  });
 
     sock.on('screen-share-answer', async (data) => {
       console.log('Received screen share answer:', data);
@@ -182,12 +187,13 @@ const ChatWindow = ({ selectedUser }) => {
     });
 
     sock.on('ice-candidate', async (data) => {
-      console.log('Received ICE candidate:', data);
-      const webRTCService = getWebRTCService();
-      if (webRTCService) {
-        await webRTCService.handleIceCandidate(data.candidate);
+      console.log('[Socket] Received ICE candidate:', data);
+      const { candidate, fromUserId } = data;
+      
+      if (webRTCService && fromUserId) {
+          await webRTCService.handleIceCandidate(candidate, fromUserId);
       }
-    });
+  });
 
     return () => {
       sock.off('private_message', handleIncoming);
