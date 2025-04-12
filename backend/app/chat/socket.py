@@ -95,18 +95,25 @@ def register_socketio_events(socketio):
     @socketio.on('screen-share-offer')
     def handle_screen_share_offer(data):
         print(f"[WebRTC] Received offer from {request.sid}")
-        print(f"[WebRTC] Target user ID: {data.get('targetUserId')}")
-        print(f"[WebRTC] Offer: {data.get('offer')}")
+        
+        # Find sender's user ID
+        from_user_id = None
+        for uid, sid in connected_users.items():
+            if sid == request.sid:
+                from_user_id = uid
+                break
+        
         target_sid = connected_users.get(str(data['targetUserId']))
-        if target_sid:
-            print(f"[WebRTC] Forwarding offer to {target_sid}")
+        if target_sid and from_user_id:
+            print(f"[WebRTC] Forwarding offer from {from_user_id} to {target_sid}")
             emit('screen-share-offer', {
                 'offer': data['offer'],
-                'from': data.get('fromUserId')  # ✅ send the sender's user ID
+                'targetUserId': data['targetUserId'],
+                'from': from_user_id
             }, room=target_sid)
-
         else:
-            print(f"[WebRTC] Target user not found: {data['targetUserId']}")
+            print(f"[WebRTC] Target user not found or sender unknown")
+            emit('error', {'message': 'Failed to establish connection'}, room=request.sid)
 
     @socketio.on('screen-share-answer')
     def handle_screen_share_answer(data):

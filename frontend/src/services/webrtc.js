@@ -152,23 +152,26 @@ class WebRTCService {
         this.currentTargetUser = targetUserId;
         
         try {
-            // Cleanup and initialize new connection
+            console.log('[WebRTC] Handling incoming offer:', offer);
             await this.initializePeerConnection();
 
+            console.log('[WebRTC] Setting remote description');
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
             
-            // Create and set local answer
+            console.log('[WebRTC] Creating answer');
             const answer = await this.peerConnection.createAnswer();
+            
+            console.log('[WebRTC] Setting local description');
             await this.peerConnection.setLocalDescription(answer);
 
+            console.log('[WebRTC] Sending answer to:', targetUserId);
             this.socket.emit('screen-share-answer', {
                 targetUserId,
                 answer
             });
             
-            console.log('Successfully created and sent answer');
         } catch (error) {
-            console.error('Error in handleIncomingOffer:', error);
+            console.error('[WebRTC] Error in handleIncomingOffer:', error);
             this.cleanup();
             throw error;
         }
@@ -176,9 +179,14 @@ class WebRTCService {
 
     async handleAnswer(answer) {
         try {
+            console.log('[WebRTC] Setting remote answer:', answer);
+            if (!this.peerConnection) {
+                throw new Error('No peer connection available');
+            }
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            console.log('[WebRTC] Successfully set remote description from answer');
         } catch (error) {
-            console.error('Error handling answer:', error);
+            console.error('[WebRTC] Error handling answer:', error);
             throw error;
         }
     }
