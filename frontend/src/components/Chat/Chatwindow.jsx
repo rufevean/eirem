@@ -10,7 +10,17 @@ const ChatWindow = ({ selectedUser }) => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isStreamAccepted, setIsStreamAccepted] = useState(false);
   const screenVideoRef = useRef(null);
-
+  useEffect(() => {
+    webRTCService.onRemoteStreamAvailable = (stream) => {
+        if (screenVideoRef.current) {
+            screenVideoRef.current.srcObject = stream;
+        }
+    };
+    
+    return () => {
+        webRTCService.cleanup();
+    };
+}, []);
   const handleSend = () => {
     console.log("🔹 handleSend triggered");
     

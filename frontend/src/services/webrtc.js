@@ -21,6 +21,11 @@ class WebRTCService {
     }
 
     async initializePeerConnection() {
+        // Cleanup existing connection
+        if (this.peerConnection) {
+            this.peerConnection.close();
+        }
+        
         // Using ExpressTURN credentials for ICE servers
         this.peerConnection = new RTCPeerConnection(EXPRESS_TURN_CREDENTIALS);
 
@@ -34,14 +39,20 @@ class WebRTCService {
         };
 
         this.peerConnection.ontrack = (event) => {
+            console.log('Received remote track:', event.streams[0]);
             this.remoteStream = event.streams[0];
+            // Trigger immediate UI update
             if (this.onRemoteStreamAvailable) {
                 this.onRemoteStreamAvailable(this.remoteStream);
             }
         };
 
+        // Add logging for connection state changes
         this.peerConnection.onconnectionstatechange = () => {
             console.log('Connection state:', this.peerConnection.connectionState);
+            if (this.peerConnection.connectionState === 'failed') {
+                this.peerConnection.restartIce();
+            }
         };
         this.peerConnection.oniceconnectionstatechange = () => {
             console.log('ICE connection state:', this.peerConnection.iceConnectionState);
@@ -54,14 +65,12 @@ class WebRTCService {
     async startScreenShare(targetUserId) {
         this.currentTargetUser = targetUserId;
 
-        if (!this.peerConnection) await this.initializePeerConnection();
-
         try {
+            await this.initializePeerConnection();
             const screenStream = await navigator.mediaDevices.getDisplayMedia({
                 video: true,
                 audio: true
             });
-
             this.localStream = screenStream; // ✅ Fix: Save local screen stream
 
             screenStream.getTracks().forEach(track => {
@@ -70,7 +79,6 @@ class WebRTCService {
 
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
-
             this.socket.emit('screen-share-offer', {
                 targetUserId,
                 offer
@@ -90,13 +98,20 @@ class WebRTCService {
     async stopScreenShare(targetUserId) {
         try {
             if (this.localStream) {
-                const videoTrack = this.localStream.getVideoTracks()[0];
-                const senders = this.peerConnection.getSenders();
-                const videoSender = senders.find(sender => sender.track?.kind === 'video');
+                // Stop all tracks
+                this.localStream.getTracks().forEach(track => {
+                    track.stop();
+                });
 
-                if (videoSender && videoTrack) {
-                    videoSender.replaceTrack(videoTrack);
+                // Remove all tracks from peer connection
+                if (this.peerConnection) {
+                    const senders = this.peerConnection.getSenders();
+                    senders.forEach(sender => {
+                        this.peerConnection.removeTrack(sender);
+                    });
                 }
+
+                this.localStream = null;
             }
 
             this.socket.emit('screen-sharing-stopped', { targetUserId });
@@ -108,11 +123,15 @@ class WebRTCService {
 
     async handleIncomingOffer(offer, targetUserId) {
         this.currentTargetUser = targetUserId;
-
-        if (!this.peerConnection) await this.initializePeerConnection();
+        
+        // Cleanup and initialize new connection
+        this.cleanup();
+        await this.initializePeerConnection();
 
         try {
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            
+            // Create and set local answer
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
 
@@ -120,8 +139,11 @@ class WebRTCService {
                 targetUserId,
                 answer
             });
+            
+            console.log('Successfully created and sent answer');
         } catch (error) {
             console.error('Error in handleIncomingOffer:', error);
+            this.cleanup();
             throw error;
         }
     }
@@ -146,6 +168,21 @@ class WebRTCService {
         } catch (error) {
             console.error('Error adding ICE candidate:', error);
         }
+    }
+
+    cleanup() {
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
+        
+        if (this.peerConnection) {
+            this.peerConnection.close();
+            this.peerConnection = null;
+        }
+        
+        this.remoteStream = new MediaStream();
+        this.currentTargetUser = null;
     }
 }
 
