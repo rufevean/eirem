@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {getSocket}  from '../../services/socket.js';
+import { getSocket } from '../../services/socket.js';
+import API from '../../services/api';
 
 const ChatWindow = ({ selectedUser }) => {
   const storedUser = JSON.parse(localStorage.getItem('user'));
@@ -43,6 +44,22 @@ const ChatWindow = ({ selectedUser }) => {
   
 
   useEffect(() => {
+    // Load chat history when user is selected
+    const loadChatHistory = async () => {
+      if (!selectedUser?.id) return;
+      
+      try {
+        const response = await API.get(`/auth/messages/${selectedUser.id}`);
+        if (response.data.success) {
+          setMessages(response.data.messages);
+        }
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      }
+    };
+
+    loadChatHistory();
+    // Setup socket listeners
     const sock = getSocket();
   
     if (!sock) {

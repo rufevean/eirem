@@ -286,3 +286,43 @@ def get_friends():
     except Exception as e:
         print("[Auth] Error fetching friends:", e)
         return jsonify({"success": False, "message": "Error fetching friends"}), 500
+
+@auth_bp.route('/messages/<user_id>', methods=['GET'])
+@jwt_required()
+def get_chat_history(user_id):
+    """Get chat history between current user and specified user"""
+    try:
+        current_email = get_jwt_identity()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get current user's ID
+        cursor.execute("SELECT id FROM users WHERE email = ?", (current_email,))
+        current_user = cursor.fetchone()
+        if not current_user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        current_user_id = current_user["id"]
+
+        # Get messages in both directions
+        cursor.execute('''
+            SELECT * FROM messages 
+            WHERE (from_user_id = ? AND to_user_id = ?)
+            OR (from_user_id = ? AND to_user_id = ?)
+            ORDER BY timestamp ASC
+        ''', (current_user_id, user_id, user_id, current_user_id))
+        
+        messages = cursor.fetchall()
+        conn.close()
+
+        formatted_messages = [{
+            'from': 'me' if str(msg['from_user_id']) == str(current_user_id) else 'them',
+            'text': msg['text'],
+            'timestamp': msg['timestamp']
+        } for msg in messages]
+
+        return jsonify({"success": True, "messages": formatted_messages})
+
+    except Exception as e:
+        print("[Auth] Error fetching messages:", e)
+        return jsonify({"success": False, "message": "Error fetching messages"}), 500

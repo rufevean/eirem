@@ -13,34 +13,19 @@ def get_db_connection():
     return conn 
 
 def init_db():
-    """ Initialize the database and create the necessary tables.""" 
-
+    """Initialize the database and create tables"""
+    db_path = os.path.join(os.path.dirname(__file__), 'eirem.db')
     conn = get_db_connection()
-    cursor = conn.cursor() 
-
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
-        )
-    ''')
-
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS friend_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        from_user_id INTEGER NOT NULL,
-        to_user_id INTEGER NOT NULL,
-        status TEXT CHECK(status IN ('pending', 'accepted', 'rejected')) DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (from_user_id) REFERENCES users(id),
-        FOREIGN KEY (to_user_id) REFERENCES users(id)
-    )
-    ''')
-
-
+    
+    # Read schema file
+    with open(os.path.join(os.path.dirname(__file__), 'schema.sql')) as f:
+        conn.executescript(f.read())
+    
     conn.commit()
     conn.close()
-    print("[Database] Database initialized")
+    print("[Database] Initialized database and created tables")
+
+# Call this when starting the application
+if __name__ == "__main__":
+    init_db()
 
