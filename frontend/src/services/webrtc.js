@@ -3,15 +3,14 @@ import { getSocket } from './socket';
 const ICE_SERVERS = {
     iceServers: [
         {
-            urls: [
-                'stun:stun1.l.google.com:19302',
-                'stun:stun2.l.google.com:19302'
-            ]
+            urls: 'stun:global.stun.twilio.com:3478',
+            username: import.meta.env.VITE_TWILIO_ACCOUNT_SID,
+            credential: import.meta.env.VITE_TWILIO_AUTH_TOKEN
         },
         {
-            urls: 'turn:relay1.expressturn.com:3478',
-            username: 'efG45XZ8SUYCNIDODZ',
-            credential: '1WR9yaEat5UIfHYe'
+            urls: 'turn:global.turn.twilio.com:3478',
+            username: import.meta.env.VITE_TWILIO_API_KEY_SID,
+            credential: import.meta.env.VITE_TWILIO_API_KEY_SECRET
         }
     ],
     iceCandidatePoolSize: 10
